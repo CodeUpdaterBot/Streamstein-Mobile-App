@@ -1,0 +1,45 @@
+# dependencies / build output
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+out/
+.vercel/
+.turbo/
+coverage/
+
+# tauri / rust
+target/
+apps/*/src-tauri/target/
+apps/*/src-tauri/gen/android/app/src/main/jniLibs/
+
+# secrets & signing
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+
+# media & library data (never commit a real library)
+Media/
+Books/
+youtube-catalog.json
+*.mp4
+*.mkv
+*.webm
+*.m4v
+*.avi
+*.mov
+*.vtt
+*.srt
+*.ass
+*.ssa
+!fixtures/**/*.vtt
+!fixtures/**/*.srt
+
+# os noise
+Thumbs.db
+.DS_Store

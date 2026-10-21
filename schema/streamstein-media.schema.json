@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://streamstein.app/schema/streamstein-media.schema.json",
+  "title": "Streamstein shared media / transcript / spiral-search schema",
+  "description": "Field-for-field analogue of Readstein's Book + SearchIndexMeta + SearchIndexSection + DatedWork, retargeted from books to videos and their VTT/SRT transcripts. Fields marked x-status=verified mirror live Readstein or StreamStein desktop source; x-status=proposed are design decisions awaiting sign-off. See docs/SPIRAL-SEARCH-COMPATIBILITY.md.",
+  "x-upside-down-compatible-with": "readest:Book@types/book.ts, readest:SearchIndex*@services/librarySearchIndex.ts, readest:DatedWork@app/library/utils/yearBands.ts",
+  "$defs": {
+    "Clock": {
+      "type": "string",
+      "description": "ISO-8601 UTC, matching StreamStein's catalog `updatedAt`.",
+      "format": "date-time"
+    },
+    "MediaFormat": {
+      "description": "First six verified from StreamStein's VIDEO_EXTS (src/ipc/youtubeLibrary.js:23); HLS proposed for streams. Readstein's analogue is BookFormat.",
+      "type": "string",
+      "enum": ["MP4", "MKV", "WEBM", "M4V", "AVI", "MOV", "HLS"]
+    },
+    "TranscriptFormat": {
+      "description": "Verified from TRANSCRIPT_EXTS (src/ipc/youtubeCatalogScan.js:13).",
+      "type": "string",
+      "enum": ["VTT", "SRT", "ASS", "SSA"]
+    },
+    "MediaItem": {
+      "type": "object",
+      "required": ["hash", "format", "title"],
+      "additionalProperties": true,
+      "properties": {
+        "hash": {
+          "type": "string",
+          "description": "Partial md5 of the media file. Same algorithm and role as Book.hash; also the on-disk directory name (Media/<hash>/).",
+          "x-status": "verified",
+          "x-mirrors": "readest:Book.hash"
+        },
+        "metaHash": {
+          "type": "string",
+          "description": "Hash of the metadata, used to aggregate different versions of the same work (re-encodes, quality variants, re-downloads).",
+          "x-status": "verified",
+          "x-mirrors": "readest:Book.metaHash"
+        },
+        "format": { "$ref": "#/$defs/MediaFormat", "x-status": "verified" },
+        "title": { "type": "string", "x-status": "verified", "x-mirrors": "readest:Book.title" },
+        "sourceTitle": {
+          "type": "string",
+          "description": "Title parsed at import; StreamStein falls back to fileName / basename when the catalog has no title.",
+          "x-mirrors": "readest:Book.sourceTitle"
+        },
+        "channelName": {
+          "type": "string",
+          "description": "The creator. Plays the role of Book.author.",
+          "x-status": "verified",
+          "x-mirrors": "readest:Book.author"
+        },
+        "libraryChannel": {
+          "type": "string",
+          "description": "Local folder-derived channel label used for shelf grouping. Plays the role of Book.groupName.",
+          "x-status": "verified",
+          "x-mirrors": "readest:Book.groupName"
+        },
+        "seriesId": { "type": "string", "x-status": "proposed", "x-mirrors": "readest:Book.groupId" },
+        "tags": { "type": "array", "items": { "type": "string" }, "x-mirrors": "readest:Book.tags" },
+        "durationMs": { "type": "integer", "minimum": 0, "x-status": "verified", "x-note": "Catalog stores durationSeconds; normalize to ms to match the tMs locator." },
+        "publishedAt": {
+          "$ref": "#/$defs/Clock",
+          "description": "Drives the spiral year ring. NOT present in the desktop catalog today; acquisition (YouTube API / TMDB) is an open task.",
+          "x-status": "proposed"
+        },
+        "completedAt": { "$ref": "#/$defs/Clock", "x-status": "verified", "x-note": "Year-ring fallback when publishedAt is absent." },
+        "filePath": { "type": "string", "x-status": "verified" },
+        "transcriptPath": {
+          "type": "string",
+          "description": "Located by dir + stripWindowsDuplicateBasename(basename) key. Null when no transcript was downloaded.",
+          "x-status": "verified"
+        },
+        "transcriptFormat": { "$ref": "#/$defs/TranscriptFormat", "x-status": "verified" },
+        "thumbnailUrl": { "type": "string", "x-status": "verified" },
+        "watchUrl": { "type": "string", "x-status": "verified" },
+        "videoId": { "type": ["string", "null"], "x-status": "verified", "x-note": "External id (YouTube). Identity for the app stays `hash`." }
+      }
+    },
+    "SearchIndexSection": {
+      "type": "object",
+      "description": "One searchable chunk. For books this is a spine section; for videos it is a chunk of transcript cues labelled by chapter or mm:ss.",
+      "required": ["idx", "label", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "idx": { "type": "integer", "minimum": 0, "x-status": "verified", "x-mirrors": "readest:SearchIndexSection.idx" },
+        "label": { "type": "string", "x-status": "verified", "x-mirrors": "readest:SearchIndexSection.label" },
+        "text": { "type": "string", "x-status": "verified", "x-mirrors": "readest:SearchIndexSection.text" },
+        "startMs": { "type": "integer", "minimum": 0, "x-status": "proposed", "x-note": "First cue's start time in this chunk; the video analogue of a section's first CFI." },
+        "cueIdx": { "type": "integer", "minimum": 0, "x-status": "proposed", "x-note": "Index of the first cue inside the chunk." }
+      }
+    },
+    "SearchIndexMeta": {
+      "type": "object",
+      "description": "Header row of a work's search.db. Versioned so stale caches rebuild; navHash tracks structural freshness separately from text freshness.",
+      "required": ["updatedAt", "version", "totalSections", "complete", "navHash"],
+      "additionalProperties": false,
+      "properties": {
+        "updatedAt": { "type": "integer", "x-status": "verified", "x-mirrors": "readest:SearchIndexMeta.updatedAt" },
+        "version": { "type": "integer", "x-status": "verified", "x-mirrors": "readest:SearchIndexMeta.version" },
+        "totalSections": { "type": "integer", "x-status": "verified", "x-mirrors": "readest:SearchIndexMeta.totalSections" },
+        "complete": { "type": "boolean", "x-status": "verified", "x-mirrors": "readest:SearchIndexMeta.complete" },
+        "navHash": {
+          "type": "string",
+          "description": "For books: hash of the TOC. For videos: hash of the chapter list / transcript revision.",
+          "x-status": "verified",
+          "x-mirrors": "readest:SearchIndexMeta.navHash"
+        }
+      }
+    },
+    "SearchLocator": {
+      "type": "object",
+      "description": "The video analogue of a CFI: a stable cursor that can be resolved to a seek position. Resolving is a separate step from matching, exactly as resolveSearchResultCfi() is on the Readstein side.",
+      "required": ["sectionIdx", "cueIdx", "tMs"],
+      "additionalProperties": false,
+      "properties": {
+        "sectionIdx": { "type": "integer", "minimum": 0 },
+        "cueIdx": { "type": "integer", "minimum": 0 },
+        "tMs": { "type": "integer", "minimum": 0, "description": "Seek target in milliseconds." },
+        "charStart": { "type": "integer", "minimum": 0, "x-note": "Offset of the match inside section text, so the excerpt can be re-highlighted." },
+        "charEnd": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "SearchConfig": {
+      "type": "object",
+      "description": "Must mean identical things in both apps or the dial lies. Mirrors readest:LibrarySearchConfig (types/book.ts:543); note modeToWholeWords/ensureSearchMode legacy-boolean derivation must be replicated exactly.",
+      "properties": {
+        "query": { "type": "string" },
+        "mode": { "type": "string", "enum": ["contains", "whole-words", "fuzzy", "nearby-words"] },
+        "matchCase": { "type": "boolean", "default": false },
+        "matchDiacritics": { "type": "boolean", "default": false },
+        "target": { "type": "string", "enum": ["works", "transcripts", "books", "text"], "x-note": "works/transcripts for Streamstein; books/text are Readstein's names for the same distinction." }
+      }
+    },
+    "YearBand": {
+      "type": "object",
+      "description": "Fixed-width slice of the timeline. Bands are equal in years by construction; slicing where the data falls makes the ring's sort order read wrong.",
+      "required": ["lo", "hi", "label", "works"],
+      "properties": {
+        "lo": { "type": "integer" },
+        "hi": { "type": "integer" },
+        "label": { "type": "string" },
+        "works": { "type": "array", "items": { "$ref": "#/$defs/DatedWork" } }
+      },
+      "x-status": "verified",
+      "x-mirrors": "readest:YearBand",
+      "x-property": "DEFAULT_MIN_GAP_YEARS = 20; years are signed (negative = BCE)"
+    },
+    "DatedWork": {
+      "type": "object",
+      "description": "One dated component of one work. The dial plots components, not works — a work with three dated parts occupies three places on the ring.",
+      "required": ["workId", "year", "endYear", "label"],
+      "properties": {
+        "workId": { "type": "string", "description": "MediaItem.hash, or Book.hash for the book side." },
+        "year": { "type": "integer" },
+        "endYear": { "type": "integer" },
+        "label": { "type": "string" },
+        "part": { "type": "string", "description": "For videos: the chapter/section within the work." }
+      },
+      "x-status": "verified",
+      "x-mirrors": "readest:DatedWork"
+    },
+    "SpiralSearchEvent": {
+      "type": "object",
+      "description": "Streaming result event. Results arrive as an async generator so the dial fills out live; nothing may block until the whole library is scanned.",
+      "required": ["kind", "workId"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["work", "section", "match", "progress", "done", "error"] },
+        "workId": { "type": "string" },
+        "sectionIdx": { "type": "integer" },
+        "locator": { "$ref": "#/$defs/SearchLocator" },
+        "excerpt": {
+          "type": "object",
+          "required": ["pre", "match", "post"],
+          "properties": {
+            "pre": { "type": "string" },
+            "match": { "type": "string" },
+            "post": { "type": "string" }
+          },
+          "x-status": "verified",
+          "x-mirrors": "readest:SearchExcerpt"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/MediaItem" },
+    { "$ref": "#/$defs/SearchIndexSection" },
+    { "$ref": "#/$defs/SearchIndexMeta" },
+    { "$ref": "#/$defs/SearchLocator" },
+    { "$ref": "#/$defs/SearchConfig" },
+    { "$ref": "#/$defs/SpiralSearchEvent" }
+  ]
+}
