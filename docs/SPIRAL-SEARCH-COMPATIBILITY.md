@@ -126,9 +126,18 @@ metadataTestSourceId, transcriptPath, fileExists, canPlayInApp`
 ### The one thing that does *not* carry over
 
 Readstein's excerpt→CFI step exists because an EPUB position is a string. A video
-position is a **time** (`tMs`), so the locator is `{sectionIdx, cueIdx, tMs}` and the
+position is a **time**, so the locator is `{sectionIdx, cueIdx, tMs}` and the
 "resolve" step becomes "map index positions to the seek target" — the shape of the
 pipeline is preserved, the payload is not.
+
+**Resolve to the cue, not the section.** A section is a chunk of up to ~700
+characters of transcript; its start time can be a minute from the passage that
+matched. So each section carries `cueSpans` (each cue's offsets inside the section
+text) and a match resolves to *the cue that speaks it*: `tMs` is that cue's start
+time. It is deliberately **not** interpolated into the middle of the cue — a
+proportional guess would look precise without being right. Implemented and covered
+by tests in `packages/search-core` (`test/search.test.ts`, "the locator seeks into
+the RIGHT cue").
 
 ## 4. Cross-app search: how one dial sees both libraries [proposed]
 

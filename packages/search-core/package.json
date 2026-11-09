@@ -1,0 +1,13 @@
+{
+  "name": "@streamstein/search-core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "The shared spiral-search core: folding, transcript parsing, cue chunking into search sections, streaming matching and locator resolution. Written to be the same matcher for Readstein books and Streamstein videos.",
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/fold.test.ts test/vtt.test.ts test/search.test.ts test/cross-app.test.ts"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

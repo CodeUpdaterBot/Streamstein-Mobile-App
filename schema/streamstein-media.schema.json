@@ -87,7 +87,24 @@
         "label": { "type": "string", "x-status": "verified", "x-mirrors": "readest:SearchIndexSection.label" },
         "text": { "type": "string", "x-status": "verified", "x-mirrors": "readest:SearchIndexSection.text" },
         "startMs": { "type": "integer", "minimum": 0, "x-status": "proposed", "x-note": "First cue's start time in this chunk; the video analogue of a section's first CFI." },
-        "cueIdx": { "type": "integer", "minimum": 0, "x-status": "proposed", "x-note": "Index of the first cue inside the chunk." }
+        "cueIdx": { "type": "integer", "minimum": 0, "x-status": "proposed", "x-note": "Index of the first cue inside the chunk." },
+        "cueSpans": {
+          "type": "array",
+          "x-status": "proposed",
+          "x-note": "Cue offsets inside `text`. Without them the only seek target is the section start, which for a 700-character chunk can be a minute from the passage that matched. Section text must be built by joining normalized cue texts with single spaces and never re-normalized afterwards, or these offsets shift.",
+          "items": {
+            "type": "object",
+            "required": ["cueIdx", "startMs", "endMs", "textStart", "textEnd"],
+            "additionalProperties": false,
+            "properties": {
+              "cueIdx": { "type": "integer", "minimum": 0 },
+              "startMs": { "type": "integer", "minimum": 0 },
+              "endMs": { "type": "integer", "minimum": 0 },
+              "textStart": { "type": "integer", "minimum": 0 },
+              "textEnd": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
       }
     },
     "SearchIndexMeta": {
@@ -110,15 +127,17 @@
     },
     "SearchLocator": {
       "type": "object",
-      "description": "The video analogue of a CFI: a stable cursor that can be resolved to a seek position. Resolving is a separate step from matching, exactly as resolveSearchResultCfi() is on the Readstein side.",
+      "description": "The video analogue of a CFI: a cursor resolved to a seek position. Resolution is a separate step from matching, exactly as resolveSearchResultCfi() is on the Readstein side. For a video the target is the cue that speaks the match — never interpolated into the middle of a cue, because a proportional guess would look precise without being right.",
       "required": ["sectionIdx", "cueIdx", "tMs"],
       "additionalProperties": false,
       "properties": {
         "sectionIdx": { "type": "integer", "minimum": 0 },
         "cueIdx": { "type": "integer", "minimum": 0 },
-        "tMs": { "type": "integer", "minimum": 0, "description": "Seek target in milliseconds." },
+        "tMs": { "type": "integer", "minimum": 0, "description": "Seek target in milliseconds: the START of the cue that speaks the match." },
         "charStart": { "type": "integer", "minimum": 0, "x-note": "Offset of the match inside section text, so the excerpt can be re-highlighted." },
-        "charEnd": { "type": "integer", "minimum": 0 }
+        "charEnd": { "type": "integer", "minimum": 0 },
+        "cueCharStart": { "type": "integer", "minimum": 0, "x-status": "proposed", "x-note": "Offset inside the containing cue's text, for highlighting in the transcript reader." },
+        "cueCharEnd": { "type": "integer", "minimum": 0, "x-status": "proposed" }
       }
     },
     "SearchConfig": {

@@ -12,13 +12,15 @@ Status: **phase 0 done (scaffold)**. Two decisions block phase 1 — see the bot
 
 ## Phase 1 — a real, runnable skeleton
 
+- [x] **`packages/search-core`**: folding with an offset map, VTT/SRT parsing, cue
+      chunking into sections with cue spans, streaming `searchWorks()` generator,
+      cue-level locator resolution — 21 tests, all passing (`npm test` in the package)
 - [ ] Decide the code base (fork Readstein monorepo vs. slim Tauri app sharing schema)
 - [ ] Video library store: `Media/<hash>/` with `meta.json`, `cover.*`, `search.db`
-- [ ] Transcript ingestion: `.vtt`/`.srt` → normalized cue list → `search.db` sections
-- [ ] `searchLibraryVideos()` as an async generator, matching Readstein's event shape
+- [ ] Transcript ingestion wired to the real catalog (`transcriptPath` → parse → index)
 - [ ] Tile grid ("video tiles") over the catalog, with the same status/filter vocabulary
-- [ ] One end-to-end proof: index a real transcript, query it, get a `tMs` seek target,
-      and seek the player to it
+- [ ] One end-to-end proof in the app shell: index a real transcript, query it, get a
+      `tMs` seek target, and seek the player to it
 
 ## Phase 2 — the dial
 
