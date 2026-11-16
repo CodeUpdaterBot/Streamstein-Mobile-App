@@ -144,4 +144,31 @@ class MediaStorePlugin(private val activity: Activity) : Plugin(activity) {
     companion object {
         const val REQUEST_CODE: Int = 0x5354
     }
+
+    /**
+     * Hand a video to whatever player the phone already has.
+     *
+     * The in-app WebView player only manages codecs the WebView supports, while the system
+     * player (Samsung Video, Photos, VLC) plays whatever the device can decode. So anything the
+     * WebView refuses opens here instead — no video on the device is unreachable.
+     */
+    @Command
+    fun openInSystemPlayer(invoke: Invoke) {
+        val args = invoke.parseArgs(OpenArgs::class.java)
+        try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
+            intent.setDataAndType(android.net.Uri.parse(args.uri), "video/*")
+            intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(intent)
+            invoke.resolve(JSObject().put("ok", true))
+        } catch (e: Exception) {
+            invoke.reject("No app on this device could open that video: " + (e.message ?: "unknown"))
+        }
+    }
+}
+
+@app.tauri.annotation.InvokeArg
+class OpenArgs {
+    lateinit var uri: String
 }

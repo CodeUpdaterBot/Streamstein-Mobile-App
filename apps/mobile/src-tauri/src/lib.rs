@@ -402,14 +402,41 @@ fn call_mediastore<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     method: &str,
 ) -> Result<serde_json::Value, String> {
+    call_mediastore_with(app, method, serde_json::json!({}))
+}
+
+#[cfg(target_os = "android")]
+fn call_mediastore_with<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    method: &str,
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, String> {
     let state = app.state::<MediaStoreState<R>>();
     let guard = state.0.lock().map_err(|e| e.to_string())?;
     let handle = guard
         .as_ref()
         .ok_or_else(|| "mediastore plugin not available".to_string())?;
     handle
-        .run_mobile_plugin::<serde_json::Value>(method, ())
+        .run_mobile_plugin::<serde_json::Value>(method, payload)
         .map_err(|e| format!("{e}"))
+}
+
+/// Android-only. Opens the video in the device's own player — the escape hatch for codecs the
+/// in-app WebView player cannot decode.
+#[tauri::command]
+async fn mediastore_open_player<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    uri: String,
+) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    {
+        call_mediastore_with(&app, "openInSystemPlayer", serde_json::json!({ "uri": uri }))
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, uri);
+        Err("The system player is Android-only".to_string())
+    }
 }
 
 /// Android-only. On other platforms the caller falls back to scanning folders directly.
@@ -473,7 +500,8 @@ pub fn run() {
             set_library_root,
             mediastore_access,
             mediastore_request_access,
-            mediastore_videos
+            mediastore_videos,
+            mediastore_open_player
         ])
         .run(tauri::generate_context!())
         .expect("error while running Streamstein");

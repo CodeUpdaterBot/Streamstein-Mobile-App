@@ -488,14 +488,26 @@ export default function App() {
             playsInline
             onError={() =>
               setError(
-                `This device cannot decode ${
-                  playing.ext.toUpperCase() || "this file"
-                }. MP4 (H.264) plays everywhere; MKV and AVI support varies.`,
+                `The in-app player could not open this ${
+                  playing.ext.toUpperCase() || "video"
+                }. Your phone can still play it — use "Phone player" below.`,
               )
             }
           />
           <div className="player-bar">
             <div className="player-title">{playing.title}</div>
+            {playing.source === "mediastore" && (
+              <button
+                className="close"
+                onClick={() => {
+                  invoke("mediastore_open_player", { uri: playing.playSrc }).catch((e) =>
+                    setError(e instanceof Error ? e.message : String(e)),
+                  );
+                }}
+              >
+                Phone player
+              </button>
+            )}
             <button className="close" onClick={() => setPlaying(null)}>
               Close
             </button>
