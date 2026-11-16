@@ -6,12 +6,22 @@ possible on this machine without re-solving Android.
 
 ## What the app is right now
 
-**Stage 1: the shell.** It installs, launches, and proves the web front-end can call into the
-native side (`native_info` returns platform/arch/version). That is deliberately the whole
-scope — a build that reaches a phone is worth more than a UI that never compiles.
+**0.2.0 — the local library app.** Point it at the folder holding your media and it shows a
+scrollable grid of tiles with real thumbnails, durations, and badges for the sibling
+transcripts/comments the desktop app writes; tap a tile to play it.
 
-Not built yet: folder scanning, video tiles, VTT transcript indexing, and the spiral dial
-(wired to `packages/search-core`). See `ROADMAP.md`.
+The native commands are `scan_videos` (recursive walk, newest first, with a depth and entry
+ceiling), `candidate_roots` (which folders on this device actually hold videos), and
+`get_settings` / `set_library_root`. Local playback goes through Tauri's asset protocol, so
+`convertFileSrc` needs `security.assetProtocol` enabled in `tauri.conf.json`.
+
+Reading `/sdcard/...` on Android 11+ needs **MANAGE_EXTERNAL_STORAGE** — the user grants it once
+in system settings, and the app says so explicitly when a folder comes back unreadable.
+
+**Deliberately not included:** streaming and downloading. The desktop downloads with yt-dlp and
+ffmpeg, which are desktop-only binaries; a button that cannot work is worse than no button.
+Playback is limited by the WebView's decoders, so MP4/H.264 plays everywhere while MKV/AVI
+support varies by device.
 
 ## Build the APK
 
