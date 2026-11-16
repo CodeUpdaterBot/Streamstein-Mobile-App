@@ -194,21 +194,129 @@ fn scan_videos(root: String) -> ScanResult {
     }
 }
 
-/// Likely media folders on the device with how many videos each holds, so first launch can
-/// suggest somewhere useful instead of asking the user to type a filesystem path.
+/// Likely media folders on this device. Android aliases the internal volume as both `/sdcard`
+/// and `/storage/emulated/0`; removable SD cards appear as `/storage/XXXX-XXXX`, which is where
+/// content often actually lives. iOS keeps media under its own tree.
+fn platform_roots() -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = Vec::new();
+
+    #[cfg(target_os = "ios")]
+    {
+        for base in ["/var/mobile/Media", "/private/var/mobile/Media"] {
+            for sub in ["DCIM", "DCIM/Camera", "Movies", "Downloads", ""] {
+                let p = if sub.is_empty() {
+                    PathBuf::from(base)
+                } else {
+                    PathBuf::from(base).join(sub)
+                };
+                roots.push(p);
+            }
+        }
+        return roots;
+    }
+
+    #[allow(clippy::needless_range_loop)]
+    let subs = [
+        "Movies",
+        "Download",
+        "Downloads",
+        "DCIM",
+        "DCIM/Camera",
+        "Pictures",
+        "Documents",
+        "Videos",
+        "Recordings",
+        "WhatsApp/Media",
+        "WhatsApp/Media/WhatsApp Video",
+        "Telegram",
+        "Telegram/Telegram Video",
+        "Snapchat",
+    ];
+
+    for base in ["/sdcard", "/storage/emulated/0"] {
+        for sub in subs {
+            roots.push(PathBuf::from(base).join(sub));
+        }
+    }
+
+    // Removable volumes: a real gap in the first version — content is often copied to an SD card.
+    if let Ok(entries) = std::fs::read_dir("/storage") {
+        for entry in entries.flatten() {
+            let volume = entry.path();
+            let name = volume
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if name == "emulated" || name == "self" || name.starts_with('.') {
+                continue;
+            }
+            for sub in ["Movies", "Download", "DCIM", "Videos", "Pictures"] {
+                roots.push(volume.join(sub));
+            }
+        }
+    }
+
+    roots
+}
+
+/// What the app can actually see. Exists to turn a silent "no videos" into a specific
+/// explanation: on Android the usual cause is a missing "All files access" grant, and the user
+/// cannot act on that if the app never says it.
+#[derive(Serialize)]
+pub struct RootDiagnosis {
+    path: String,
+    exists: bool,
+    readable: bool,
+    video_count: usize,
+}
+
+#[derive(Serialize)]
+pub struct StorageDiagnosis {
+    /// False when even the top of the shared storage cannot be listed — the permission signal.
+    can_list_shared_storage: bool,
+    roots: Vec<RootDiagnosis>,
+    candidate_count: usize,
+}
+
+#[tauri::command]
+fn storage_diagnosis() -> StorageDiagnosis {
+    let shared = PathBuf::from("/storage/emulated/0");
+    let can_list_shared_storage = cfg!(not(target_os = "android"))
+        || std::fs::read_dir(&shared)
+            .map(|mut it| it.next().is_some())
+            .unwrap_or(false);
+
+    let mut roots = Vec::new();
+    for root in platform_roots() {
+        if !root.exists() {
+            continue;
+        }
+        let readable = std::fs::read_dir(&root).is_ok();
+        let mut videos = Vec::new();
+        if readable {
+            walk(&root, 0, &mut videos);
+        }
+        roots.push(RootDiagnosis {
+            path: root.to_string_lossy().to_string(),
+            exists: true,
+            readable,
+            video_count: videos.len(),
+        });
+    }
+    roots.sort_by(|a, b| b.video_count.cmp(&a.video_count));
+    let candidate_count = roots.iter().filter(|r| r.video_count > 0).count();
+    StorageDiagnosis {
+        can_list_shared_storage,
+        roots,
+        candidate_count,
+    }
+}
+
+/// Folders that actually hold videos, so first launch can suggest somewhere useful instead of
+/// asking the user to type a filesystem path.
 #[tauri::command]
 fn candidate_roots(app: tauri::AppHandle) -> Vec<CandidateRoot> {
-    let mut roots: Vec<PathBuf> = vec![
-        PathBuf::from("/sdcard/Movies"),
-        PathBuf::from("/sdcard/Download"),
-        PathBuf::from("/sdcard/Downloads"),
-        PathBuf::from("/sdcard/DCIM"),
-        PathBuf::from("/sdcard/Documents"),
-        PathBuf::from("/sdcard/Videos"),
-        PathBuf::from("/storage/emulated/0/Movies"),
-        PathBuf::from("/storage/emulated/0/Download"),
-        PathBuf::from("/storage/emulated/0/DCIM"),
-    ];
+    let mut roots = platform_roots();
     if let Ok(dir) = app.path().app_data_dir() {
         roots.push(dir);
     }
@@ -264,6 +372,7 @@ pub fn run() {
             native_info,
             scan_videos,
             candidate_roots,
+            storage_diagnosis,
             get_settings,
             set_library_root
         ])

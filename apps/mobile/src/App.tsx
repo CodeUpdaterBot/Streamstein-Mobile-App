@@ -37,6 +37,13 @@ type CandidateRoot = { path: string; video_count: number };
 type Settings = { library_root: string | null };
 type SortKey = "recent" | "title" | "largest";
 
+type StorageDiagnosis = {
+  /** False when the app cannot even list the top of shared storage — the permission signal. */
+  can_list_shared_storage: boolean;
+  roots: { path: string; exists: boolean; readable: boolean; video_count: number }[];
+  candidate_count: number;
+};
+
 const fmtSize = (b: number) => {
   if (!b) return "";
   const gb = b / 1024 ** 3;
@@ -134,6 +141,8 @@ export default function App() {
   const [sort, setSort] = useState<SortKey>("recent");
   const [playing, setPlaying] = useState<VideoEntry | null>(null);
   const [showSetup, setShowSetup] = useState(false);
+  // Only fetched when the usual folders come back empty, so a healthy launch pays nothing.
+  const [diag, setDiag] = useState<StorageDiagnosis | null>(null);
 
   const runScan = useCallback(async (root: string) => {
     setBusy(true);
@@ -161,6 +170,7 @@ export default function App() {
           await runScan(s.library_root);
         } else {
           setRoots(await invoke<CandidateRoot[]>("candidate_roots"));
+          setDiag(await invoke<StorageDiagnosis>("storage_diagnosis"));
           setShowSetup(true);
         }
       } catch (e) {
@@ -200,6 +210,7 @@ export default function App() {
   const reopen = useCallback(async () => {
     try {
       setRoots(await invoke<CandidateRoot[]>("candidate_roots"));
+      setDiag(await invoke<StorageDiagnosis>("storage_diagnosis"));
     } catch {
       /* keep whatever list we had */
     }
@@ -292,11 +303,62 @@ export default function App() {
             </p>
 
             {roots.length === 0 ? (
-              <p className="sheet-sub">
-                No folders with videos were found yet. Copy some video files onto the phone (for
-                example into <code>Movies</code> or <code>Download</code>), then reopen this
-                screen.
-              </p>
+              <div className="diag">
+                {diag && !diag.can_list_shared_storage ? (
+                  <>
+                    <h3>Streamstein can&apos;t read your files yet</h3>
+                    <p className="sheet-sub">
+                      Android blocks apps from reading shared storage until you grant it. Nothing
+                      is wrong with your videos or where you put them.
+                    </p>
+                    <ol className="steps">
+                      <li>
+                        Open <strong>Settings &rarr; Apps &rarr; Streamstein</strong>
+                      </li>
+                      <li>
+                        Tap <strong>Permissions</strong>, then allow{" "}
+                        <strong>Files and media / Photos and videos</strong>
+                      </li>
+                      <li>
+                        Still in Settings, open <strong>Special app access &rarr; All files
+                        access</strong> and allow <strong>Streamstein</strong> (Android 11+ keeps
+                        this switch there, not under Permissions)
+                      </li>
+                      <li>
+                        Come back here and tap <strong>Rescan</strong>
+                      </li>
+                    </ol>
+                  </>
+                ) : (
+                  <>
+                    <h3>No videos found in the usual places</h3>
+                    <p className="sheet-sub">
+                      {diag && diag.roots.length > 0
+                        ? "Streamstein can read those folders, but none hold a playable video file."
+                        : "None of the standard media folders exist on this device yet."}{" "}
+                      Copy some videos into <code>Movies</code> or <code>Download</code>, then
+                      tap Rescan.
+                    </p>
+                  </>
+                )}
+
+                {diag && diag.roots.length > 0 && (
+                  <div className="diag-list">
+                    {diag.roots.slice(0, 6).map((r) => (
+                      <div className="diag-row" key={r.path}>
+                        <span className="root-path">{r.path}</span>
+                        <span className="root-count">
+                          {r.readable ? r.video_count + " videos" : "not readable"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button className="ghost" onClick={reopen}>
+                  Rescan
+                </button>
+              </div>
             ) : (
               <div className="root-list">
                 {roots.map((r) => (

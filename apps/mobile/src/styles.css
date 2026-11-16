@@ -379,6 +379,47 @@ body {
   word-break: break-all;
 }
 
+
+/* diagnosis block in the folder sheet */
+.diag h3 {
+  font-size: 14.5px;
+  margin: 0 0 6px;
+}
+
+.steps {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-dim);
+}
+
+.steps strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.diag-list {
+  margin: 0 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.diag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  font-size: 12px;
+  background: #101014;
+}
+
+.diag-row + .diag-row {
+  border-top: 1px solid var(--border);
+}
+
 .platform {
   position: fixed;
   right: 8px;
