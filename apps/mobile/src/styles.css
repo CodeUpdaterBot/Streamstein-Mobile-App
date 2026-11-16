@@ -273,6 +273,25 @@ body {
   margin: 0 0 6px;
 }
 
+
+.primary {
+  width: 100%;
+  background: var(--accent);
+  border: none;
+  border-radius: 11px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 14px;
+}
+
+.sheet-hint {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
 .sheet-sub {
   font-size: 12.5px;
   color: var(--text-dim);

@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tauri::Manager;
 
 const VIDEO_EXTS: [&str; 9] = ["mp4", "mkv", "webm", "m4v", "mov", "avi", "mpg", "mpeg", "ts"];
@@ -365,16 +366,114 @@ fn native_info() -> serde_json::Value {
     })
 }
 
+// ── MediaStore (Android's own media index) ─────────────────────────────────────────────────
+// Implemented in Kotlin (MediaStorePlugin.kt) because that is where Android's content resolver
+// and runtime permissions live. A Tauri plugin handle is only obtainable in the plugin's own
+// `setup` hook, so it is captured there and parked in managed state for the commands to use —
+// `app.plugin(name)` is NOT that API (it registers a plugin, it does not look one up).
+
+const MEDIASTORE_PLUGIN: &str = "mediastore";
+const MEDIASTORE_CLASS: &str = "MediaStorePlugin";
+const MEDIASTORE_IDENTIFIER: &str = "com.streamstein.app";
+
+#[derive(Default)]
+struct MediaStoreState<R: tauri::Runtime>(Mutex<Option<tauri::plugin::PluginHandle<R>>>);
+
+fn mediastore_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    tauri::plugin::Builder::new(MEDIASTORE_PLUGIN)
+        .setup(|app, api| {
+            #[cfg(target_os = "android")]
+            {
+                let handle = api.register_android_plugin(MEDIASTORE_IDENTIFIER, MEDIASTORE_CLASS)?;
+                app.manage(MediaStoreState::<R>(Mutex::new(Some(handle))));
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                let _ = (app, api);
+            }
+            Ok(())
+        })
+        .build()
+}
+
+/// Calls one of the Kotlin plugin's @Command methods.
+#[cfg(target_os = "android")]
+fn call_mediastore<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    method: &str,
+) -> Result<serde_json::Value, String> {
+    let state = app.state::<MediaStoreState<R>>();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
+    let handle = guard
+        .as_ref()
+        .ok_or_else(|| "mediastore plugin not available".to_string())?;
+    handle
+        .run_mobile_plugin::<serde_json::Value>(method, ())
+        .map_err(|e| format!("{e}"))
+}
+
+/// Android-only. On other platforms the caller falls back to scanning folders directly.
+#[tauri::command]
+async fn mediastore_access<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    {
+        call_mediastore(&app, "access")
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("MediaStore is Android-only".to_string())
+    }
+}
+
+/// Android-only. Triggers the one-tap runtime permission dialog.
+#[tauri::command]
+async fn mediastore_request_access<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    {
+        call_mediastore(&app, "requestAccess")
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("MediaStore is Android-only".to_string())
+    }
+}
+
+/// Every video the device's media scanner knows about, newest first, as content:// URIs.
+#[tauri::command]
+async fn mediastore_videos<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    {
+        call_mediastore(&app, "queryVideos")
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("MediaStore is Android-only".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(mediastore_plugin())
         .invoke_handler(tauri::generate_handler![
             native_info,
             scan_videos,
             candidate_roots,
             storage_diagnosis,
             get_settings,
-            set_library_root
+            set_library_root,
+            mediastore_access,
+            mediastore_request_access,
+            mediastore_videos
         ])
         .run(tauri::generate_context!())
         .expect("error while running Streamstein");
